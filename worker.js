@@ -4,7 +4,7 @@ export default {
     const CORS = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
 
     if (request.method === 'OPTIONS') {
@@ -12,22 +12,25 @@ export default {
     }
 
     const url = new URL(request.url);
-    const discordPath = url.pathname.replace('/discord', '');
-    const discordUrl  = `https://discord.com/api/v10${discordPath}${url.search}`;
+    // أي مسار يجي للـ worker نحوله لـ Discord API مباشرة
+    const discordUrl = 'https://discord.com/api/v10' + url.pathname + url.search;
 
-    const isFormData = request.headers.get('content-type')?.includes('multipart');
-    const body = request.method !== 'GET' ? (isFormData ? await request.formData() : await request.text()) : null;
+    const contentType = request.headers.get('content-type') || '';
+    const isFormData  = contentType.includes('multipart');
+
+    let body = undefined;
+    if (request.method !== 'GET') {
+      body = isFormData ? await request.formData() : await request.text();
+    }
 
     const headers = { 'Authorization': `Bot ${DISCORD_TOKEN}` };
-    if (!isFormData) headers['Content-Type'] = 'application/json';
+    if (!isFormData && request.method !== 'GET') {
+      headers['Content-Type'] = 'application/json';
+    }
 
-    const resp = await fetch(discordUrl, {
-      method: request.method,
-      headers,
-      body: body || undefined,
-    });
-
+    const resp = await fetch(discordUrl, { method: request.method, headers, body });
     const data = await resp.text();
+
     return new Response(data, {
       status: resp.status,
       headers: { ...CORS, 'Content-Type': 'application/json' },
